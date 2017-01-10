@@ -1,0 +1,233 @@
+Sub Optimizer()
+
+'Turn off screen updates so macro runs faster
+
+With Excel.Application
+        .ScreenUpdating = False
+        .Calculation = Excel.xlCalculationManual
+        .EnableEvents = False
+End With
+
+'Input increment to go up by (Eg. 5% = 0.05)
+'Keep in mind the maximum number of rows is 1,048,576 when choosing increment
+
+Increment = 0.05
+
+'Fixed allocation inputs (Public Equity at 5%)
+
+PublicEquity = 0.05
+
+'Set allocations to 0 (O&G has worst Sharpe Ratio)
+
+OilAndGas = 0
+
+'Find out number of combinations (Cannot exceed 1,048,576 combinations)
+
+'Remaining allocation after fixed inputs
+
+Allocation = (1 - PublicEquity)
+
+'Number of available assets to distribute allocation
+
+NumberOfAssets = 3
+
+'Number of combinations to try (Cannot exceed 1,048,576 combinations)
+
+Dim NumberOfPossibilities As Double
+NumberOfPossibilities = ((Allocation / Increment) + 1) ^ NumberOfAssets
+
+'Set available assets for allocation to start at 0
+
+PrivateEquity = 0
+RealEstate = 0
+TimberOrFarm = 0
+
+'Loop through all combinations
+
+For i = 10 To (NumberOfPossibilities + 10)
+
+    PrivateEquity = 0
+
+    For j = 1 To (((Allocation / Increment) + 1) + 1)
+
+        RealEstate = 0
+
+        For k = 1 To (((Allocation / Increment) + 1) + 1)
+
+            TimberOrFarm = 0
+
+            For l = 1 To (((Allocation / Increment) + 1) + 1)
+
+                Cells.Item(i, "B") = PublicEquity
+                Cells.Item(i, "C") = PrivateEquity
+                Cells.Item(i, "D") = RealEstate
+                Cells.Item(i, "E") = OilAndGas
+                Cells.Item(i, "F") = TimberOrFarm
+
+                TimberOrFarm = TimberOrFarm + Increment
+
+                i = i + 1
+            Next l
+
+            Cells.Item(i, "B") = PublicEquity
+            Cells.Item(i, "C") = PrivateEquity
+            Cells.Item(i, "D") = RealEstate
+            Cells.Item(i, "E") = OilAndGas
+            Cells.Item(i, "F") = TimberOrFarm
+
+            RealEstate = RealEstate + Increment
+
+            i = i + 1
+        Next k
+
+        Cells.Item(i, "B") = PublicEquity
+        Cells.Item(i, "C") = PrivateEquity
+        Cells.Item(i, "D") = RealEstate
+        Cells.Item(i, "E") = OilAndGas
+        Cells.Item(i, "F") = TimberOrFarm
+
+        PrivateEquity = PrivateEquity + Increment
+
+        i = i + 1
+    Next j
+
+Next i
+
+    'Calculate sum of allocations
+
+    For m = 10 To (NumberOfPossibilities + ((Allocation / Increment) + 1) ^ 2 + ((Allocation / Increment) + 1) + 10)
+        Cells.Item(m, "A").Value = Cells.Item(m, "B").Value + Cells.Item(m, "C").Value + Cells.Item(m, "D").Value + Cells.Item(m, "E").Value + Cells.Item(m, "F").Value
+    Next m
+    
+    'Filter only the allocation combinations with the sum of 1
+    
+    Dim MaxRange As Long
+    MaxRange = (NumberOfPossibilities + ((Allocation / Increment) + 1) ^ 2 + ((Allocation / Increment) + 1) + 10)
+    Range("A9").Select
+    Selection.AutoFilter
+    ActiveSheet.Range("$A$9:$L$" & MaxRange).AutoFilter Field:=1, Criteria1:="1"
+    
+    'Count the number of allocation combinations with the sum of 1
+    
+    Dim Count As Long
+    Count = Application.WorksheetFunction.CountIf(Range("A:A"), 1)
+    
+    'Calculate other formulas such as mean, std, coc, etc
+    
+    Range("A9").Select
+    For n = 1 To Count
+        Cells.Find(What:="1", After:=ActiveCell, LookIn:=xlFormulas, LookAt:= _
+        xlWhole, SearchOrder:=xlByColumns, SearchDirection:=xlNext, MatchCase:= _
+        False, SearchFormat:=False).Activate
+        Row = ActiveCell.Row
+    Range("G" & Row).Select
+    Selection.FormulaArray = "=SUMPRODUCT(R3C2:R7C2,TRANSPOSE(RC[-5]:RC[-1]))"
+    Range("H" & Row).Select
+    Selection.FormulaArray = _
+    "=SQRT(MMULT(RC[-6]:RC[-2],MMULT(R3C6:R7C10,TRANSPOSE(RC[-6]:RC[-2]))))*100"
+    Range("I" & Row).Select
+    ActiveCell.FormulaR1C1 = "=(RC[-2]- R3C12)/RC[-1]"
+    Range("J" & Row).Select
+    ActiveCell.FormulaR1C1 = "=SUMPRODUCT(RC[-8]:RC[-4], R1C6:R1C10)"
+    Range("K" & Row).Select
+    ActiveCell.FormulaR1C1 = "=LN(LOGNORM.INV(0.01,RC[-4],RC[-3]))/100"
+    Range("L" & Row).Select
+    ActiveCell.FormulaR1C1 = "=LN(LOGNORM.INV(0.05,RC[-5],RC[-4]))/100"
+    Next n
+            
+'Turn screen updates back on after code is done running
+            
+With Excel.Application
+        .ScreenUpdating = True
+        .Calculation = Excel.xlAutomatic
+        .EnableEvents = True
+End With
+
+
+End Sub
+
+Option Explicit
+
+' Description:
+'    This is the "driver" for the entire module.
+Public Sub DropUnusedStyles()
+
+    Dim styleObj As Style
+    Dim rngCell As Range
+    Dim wb As Workbook
+    Dim wsh As Worksheet
+    Dim str As String
+    Dim iStyleCount As Long
+    Dim dict As New Scripting.Dictionary    ' <- from Tools / References... / "Microsoft Scripting Runtime"
+
+    ' wb := workbook of interest.  Choose one of the following
+    ' Set wb = ThisWorkbook ' choose this module's workbook
+    Set wb = ActiveWorkbook ' the active workbook in excel
+
+
+    Debug.Print "BEGINNING # of styles in workbook: " & wb.Styles.Count
+    MsgBox "BEGINNING # of styles in workbook: " & wb.Styles.Count
+
+    ' dict := list of styles
+    For Each styleObj In wb.Styles
+        str = styleObj.NameLocal
+        iStyleCount = iStyleCount + 1
+        Call dict.Add(str, 0)    ' First time:  adds keys
+    Next styleObj
+    Debug.Print "  dictionary now has " & dict.Count & " entries."
+    ' Status, dictionary has styles (key) which are known to workbook
+
+
+    ' Traverse each visible worksheet and increment count each style occurrence
+    For Each wsh In wb.Worksheets
+        If wsh.Visible Then
+            For Each rngCell In wsh.UsedRange.Cells
+                str = rngCell.Style
+                dict.Item(str) = dict.Item(str) + 1     ' This time:  counts occurrences
+            Next rngCell
+        End If
+    Next wsh
+    ' Status, dictionary styles (key) has cell occurrence count (item)
+
+
+    ' Try to delete unused styles
+    Dim aKey As Variant
+    On Error Resume Next    ' wb.Styles(aKey).Delete may throw error
+
+    For Each aKey In dict.Keys
+
+        ' display count & stylename
+        '    e.g. "24   Normal"
+        Debug.Print dict.Item(aKey) & vbTab & aKey
+
+        If dict.Item(aKey) = 0 Then
+            ' Occurrence count (Item) indicates this style is not used
+            Call wb.Styles(aKey).Delete
+            If Err.Number <> 0 Then
+                Debug.Print vbTab & "^-- failed to delete"
+                Err.Clear
+            End If
+            Call dict.Remove(aKey)
+        End If
+
+    Next aKey
+
+    Debug.Print "ENDING # of style in workbook: " & wb.Styles.Count
+    MsgBox "ENDING # of style in workbook: " & wb.Styles.Count
+
+End Sub
+
+Sub Clear()
+
+
+'Clears the combinations in the worksheet
+
+Selection.AutoFilter
+Rows("10:10").Select
+Range(Selection, Selection.End(xlDown)).Select
+Range(Selection, Selection.End(xlDown)).Select
+Selection.ClearContents
+Range("A8").Select
+
+
+End Sub
